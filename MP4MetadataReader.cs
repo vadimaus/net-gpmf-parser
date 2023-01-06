@@ -1,4 +1,4 @@
-﻿using MP4Reader.IO;
+using MP4Reader.IO;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -145,7 +145,7 @@ namespace Cromatix.MP4Reader
 
                             int pos = gpmf.Position;
                             int repeats = gpmf.Repeat;
-                            double increment = (_out / _in) / repeats;
+                            double increment = (_out - _in) / repeats;
 
                             devisors = devisors.Reverse().ToArray();
 
@@ -226,7 +226,7 @@ namespace Cromatix.MP4Reader
 
             do
             {
-                long atomSize = reader.GetInt32();
+                long atomSize = reader.GetUInt32();
                 string atomName = ByteUtil.IntToString(reader.GetUInt32());
 
                 if (atomSize == 1)
