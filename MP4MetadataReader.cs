@@ -166,8 +166,8 @@ namespace Cromatix.MP4Reader
                                 klv.Lat = cv[0];
                                 klv.Lon = cv[1];
                                 klv.Alt = cv[2];
-                                klv.GroundSpeed = cv[3];
-                                klv.VirtualSpeed = cv[4];
+                                //klv.GroundSpeed = cv[3];
+                                //klv.VirtualSpeed = cv[4]; /* The speed is not accurate here. You need to compute it. Speed = Distance/Time  */
                                 klv.HDOP = DilutionOfPrecision;
                                 klv.GPSFix = GPSFix;
 
@@ -180,31 +180,43 @@ namespace Cromatix.MP4Reader
             }
         }
 
-        public void ExportToFile(string filePath, ExportFormat format)
+        public bool ExportToFile(string filePath, ExportFormat format)
         {
-            switch (format)
+            if (telemetry.KLVs == null || telemetry.KLVs.Count == 0)
+                return false;
+
+            try
             {
-                case ExportFormat.GPX:
-                    {
-                        try
+                switch (format)
+                {
+                    case ExportFormat.GPX:
                         {
-                            string gpx = Export.ToGPX(telemetry);
-                            File.WriteAllText(filePath, gpx);
+                            try
+                            {
+                                string gpx = Export.ToGPX(telemetry);
+                                File.WriteAllText(filePath, gpx);
+                                return true;
+                            }
+                            catch (Exception e)
+                            {
+                                throw new Exception("Error exporting to GPX", e);
+                            }
                         }
-                        catch (Exception e)
-                        {
-                            throw new Exception("Error exporting to GPX", e);
-                        }
+                    default:
                         break;
-                    }
-                default:
-                    break;
+                }
             }
+            catch
+            {
+                return false;
+            }
+
+            return false;
         }
 
         private List<double> GetCoordValues(GPMFStream gpmf, int[] elements, ref int pos)
         {
-            // kepps latitude, longitude, altitude, 2D ground speed, and 3D speed values
+            // keeps latitude, longitude, altitude, 2D ground speed, and 3D speed values
             List<double> coords = new List<double>();
 
             for (int i = 0; i < elements.Length; i++)

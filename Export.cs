@@ -37,7 +37,6 @@ namespace Cromatix.MP4Reader
                                     <time>{klv.Time.Value.ToString("yyyy-MM-ddTHH:mm:ss:fffZ")}</time>
                                     <fix>{klv.GPSFix}</fix>
                                     <hdop>{klv.HDOP}</hdop>
-                                    <cmt>altitude system: MSLV; 2dSpeed: {klv.GroundSpeed}; 3dSpeed: {klv.VirtualSpeed}</cmt>
                                  </trkpt>");
             }
 
