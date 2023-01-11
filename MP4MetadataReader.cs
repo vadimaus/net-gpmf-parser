@@ -102,7 +102,7 @@ namespace Cromatix.MP4Reader
                         // GPS Fix = 0 - no lock, 2 or 3 - 2D or 3D Lock
                         if (gpmf.FourCC == "GPSF")
                         { 
-                            short fix = ByteUtil.GetShort(gpmf);
+                            int fix = ByteUtil.GetInt(gpmf);
 
                             if (fix == 2)
                             {

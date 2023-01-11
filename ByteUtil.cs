@@ -93,6 +93,16 @@ namespace Cromatix.MP4Reader
             return ByteUtil.IntToShort(ByteUtil.BytesToShort(bytes, 0));
         }
 
+        internal static int GetInt(GPMFStream gpmf)
+        {
+            var bytes = new ReadOnlySpan<byte>(gpmf.Content, gpmf.Position + 8, gpmf.StructSize).ToArray();
+
+            if (BitConverter.IsLittleEndian)
+                bytes = bytes.Reverse().ToArray();
+
+            return BitConverter.ToInt32(bytes, 0);
+        }
+
         private static short IntToShort(int num)
         {
             return (short)((((num) >> 8) & 0xff) | (((num) << 8) & 0xff00));
