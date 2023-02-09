@@ -68,17 +68,13 @@ namespace Cromatix.MP4Reader
         public void ProcessGPMFTelemetry()
         {
             int payloads = GetNumberOfPayloads;
-
-            //telemetry.FileName = this.FileName;
+            int gpsIndex = 0;
             telemetry.KLVs = new List<KLV>();
 
             for (int index = 0; index < payloads; index++)
             {
                 double _in; double _out;
-                //int payloadSize = GetPayloadSize(index);
                 byte[] payload = GetPayload(index);
-
-                GetPayloadTime(index, out _in, out _out);
 
                 using (GPMFStream gpmf = new GPMFStream(payload))
                 {
@@ -86,7 +82,7 @@ namespace Cromatix.MP4Reader
                     int[] devisors = null;
                     string GPSFix = "0";
                     short DilutionOfPrecision = 0;
-                    DateTime? utcStartTime = null;
+                    DateTime? utcStartTime = default(DateTime);
 
                     do
                     {
@@ -101,7 +97,7 @@ namespace Cromatix.MP4Reader
 
                         // GPS Fix = 0 - no lock, 2 or 3 - 2D or 3D Lock
                         if (gpmf.FourCC == "GPSF")
-                        { 
+                        {
                             int fix = ByteUtil.GetInt(gpmf);
 
                             if (fix == 2)
@@ -140,13 +136,19 @@ namespace Cromatix.MP4Reader
 
                         if (gpmf.FourCC == "GPS5" && gpmf.Repeat > 0 && devisors != null)
                         {
-                            if (DilutionOfPrecision > 1000)
-                                continue;
+                            GetPayloadTime(gpsIndex, out _in, out _out);
+                            gpsIndex++;
 
-                            int pos = gpmf.Position;
                             int repeats = gpmf.Repeat;
                             double increment = (_out - _in) / repeats;
 
+                            if (DilutionOfPrecision > 999)
+                            {
+                                utcStartTime = utcStartTime.Value.AddSeconds(increment);
+                                continue;
+                            }
+
+                            int pos = gpmf.Position;
                             devisors = devisors.Reverse().ToArray();
 
                             for (int i = 0; i < repeats; i++)
@@ -156,18 +158,19 @@ namespace Cromatix.MP4Reader
 
                                 if (telemetry.KLVs.Count > 0 && telemetry.KLVs[telemetry.KLVs.Count - 1].Time != null)
                                 {
-                                    klv.Time = telemetry.KLVs[telemetry.KLVs.Count - 1].Time.Value.AddMilliseconds(increment * 1000);
+                                    klv.Time = utcStartTime.Value.AddSeconds(increment);
+                                    utcStartTime = klv.Time.Value;
                                 }
                                 else
                                 {
-                                    klv.Time = utcStartTime.Value.AddMilliseconds(increment * 1000);
+                                    klv.Time = utcStartTime;
                                 }
 
                                 klv.Lat = cv[0];
                                 klv.Lon = cv[1];
                                 klv.Alt = cv[2];
-                                //klv.GroundSpeed = cv[3];
-                                //klv.VirtualSpeed = cv[4]; /* The speed is not accurate here. You need to compute it. Speed = Distance/Time  */
+                                klv.GroundSpeed = cv[3];
+                                klv.VirtualSpeed = cv[4];
                                 klv.HDOP = DilutionOfPrecision;
                                 klv.GPSFix = GPSFix;
 
