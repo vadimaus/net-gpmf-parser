@@ -59,7 +59,7 @@ namespace Cromatix.MP4Reader
                 doc.Save(writer);
             }
 
-            return sb.ToString();
+            return sb.ToString().Replace("utf-16", "utf-8");
         }
     }
 }
