@@ -72,16 +72,27 @@ namespace Cromatix.MP4Reader
 
         internal static uint BytesToInt(byte[] array, int startPos)
         {
-            var byteSpan = new ReadOnlySpan<byte>(array, startPos, 4);
+            return BytesToInt(array.AsSpan(startPos));
+        }
+        internal static uint BytesToInt(ReadOnlySpan<byte> array)
+        {
+            var byteSpan = array.Slice(0,4);
             return BitConverter.ToUInt32(byteSpan);
         }
 
         internal static ushort BytesToShort(byte[] array, int startPos)
         {
-            var byteSpan = new ReadOnlySpan<byte>(array, startPos, 2);
+            return BytesToShort(array.AsSpan(startPos));
+        }
+        internal static ushort BytesToShort(ReadOnlySpan<byte> array)
+        {
+            var byteSpan = array.Slice(0,2);
             return BitConverter.ToUInt16(byteSpan);
         }
 
+        internal static int HexToInt(uint num) {
+            return HexToInt((int)num);
+        }
         internal static int HexToInt(int num)
         {
             return ((num & 0xff) << 24) | ((num & 0xff00) << 8) | ((num >> 8) & 0xff00) | ((num >> 24) & 0xff);
