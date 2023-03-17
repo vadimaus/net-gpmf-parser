@@ -76,7 +76,7 @@ namespace Cromatix.MP4Reader
         }
         internal static uint BytesToInt(ReadOnlySpan<byte> array)
         {
-            var byteSpan = array.Slice(0,4);
+            var byteSpan = array.Slice(0, 4);
             return BitConverter.ToUInt32(byteSpan);
         }
 
@@ -86,11 +86,12 @@ namespace Cromatix.MP4Reader
         }
         internal static ushort BytesToShort(ReadOnlySpan<byte> array)
         {
-            var byteSpan = array.Slice(0,2);
+            var byteSpan = array.Slice(0, 2);
             return BitConverter.ToUInt16(byteSpan);
         }
 
-        internal static int HexToInt(uint num) {
+        internal static int HexToInt(uint num)
+        {
             return HexToInt((int)num);
         }
         internal static int HexToInt(int num)
@@ -112,6 +113,38 @@ namespace Cromatix.MP4Reader
                 bytes = bytes.Reverse().ToArray();
 
             return BitConverter.ToInt32(bytes, 0);
+        }
+
+        internal static int ReadLong(ref ReadOnlySpan<byte> data)
+        {
+            var target = data.Slice(0, 4);
+
+            if (BitConverter.IsLittleEndian)
+            {
+                var tmp = target.ToArray().AsSpan();
+                tmp.Reverse();
+                target = tmp;
+            }
+
+            var result = BitConverter.ToInt32(target);
+            data = data.Slice(4);
+            return result;
+        }
+
+        internal static short ReadShort(ref ReadOnlySpan<byte> data)
+        {
+            var target = data.Slice(0, 2);
+
+            if (BitConverter.IsLittleEndian)
+            {
+                var tmp = target.ToArray().AsSpan();
+                tmp.Reverse();
+                target = tmp;
+            }
+
+            var result = BitConverter.ToInt16(target);
+            data = data.Slice(2);
+            return result;
         }
 
         private static short IntToShort(int num)

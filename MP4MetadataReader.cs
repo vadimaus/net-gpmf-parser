@@ -1,10 +1,7 @@
-using MP4Reader.IO;
 using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using MP4Reader.IO;
 
 namespace Cromatix.MP4Reader
 {
@@ -23,6 +20,7 @@ namespace Cromatix.MP4Reader
 
         private string trakType;
         private string trakSubType;
+        private Telemetry telemetry = new Telemetry();
 
         internal int TrakNum { get; private set; }
         internal int TrakClockDaemon { get; private set; } // time scale
@@ -58,18 +56,22 @@ namespace Cromatix.MP4Reader
             }
         }
 
+        public Telemetry Telemetry 
+        { 
+            get { return telemetry; } 
+        }
+
         public MP4MetadataReader(Stream stream)
         {
             _stream = stream;
             ReadMetadata();
         }
 
-        private Telemetry telemetry = new Telemetry();
-
         public void ProcessGPMFTelemetry()
         {
             int payloads = GetNumberOfPayloads;
             int gpsIndex = 0;
+            bool hasGPS9Data = false;
             telemetry.KLVs = new List<KLV>();
 
             for (int index = 0; index < payloads; index++)
@@ -139,42 +141,50 @@ namespace Cromatix.MP4Reader
                         {
                             int pos = gpmf.Position;
                             int repeats = gpmf.Repeat;
-                            double increment = (_out - _in) / repeats;
 
                             devisors = devisors.Reverse().ToArray();
+
+                            if (hasGPS9Data == false && telemetry.KLVs.Count > 0)
+                            {
+                                hasGPS9Data = true;
+                                telemetry.KLVs.Clear();
+                            }
 
                             for (int i = 0; i < repeats; i++)
                             {
                                 var klv = new KLV();
                                 var cv = GetCoordValues9(gpmf, devisors, ref pos);
 
+                                klv.Time = epoch2.AddDays(cv.d2000).AddSeconds(cv.Seconds);
 
-                                klv.Time = epoch2.AddDays(cv.d2000).AddSeconds(cv.secs);
+                                klv.Lat = cv.Lat;
+                                klv.Lon = cv.Lon;
+                                klv.Alt = cv.Alt;
+                                klv.GroundSpeed = cv.Speed2d;
+                                klv.VirtualSpeed = cv.Speed3d;
+                                klv.HDOP = (int)cv.DOP;
 
-                                klv.Lat = cv.lat;
-                                klv.Lon = cv.lon;
-                                klv.Alt = cv.alt;
-                                klv.GroundSpeed = cv.speed2d;
-                                klv.VirtualSpeed = cv.speed3d;
-                                klv.HDOP = (int)cv.dop;
-
-                                switch (cv.fix) {
-                                case 0:
-                                    klv.GPSFix = "0";
-                                    break;
-                                case 2:
-                                    klv.GPSFix = "2d";
-                                    break;
-                                case 3:
-                                    klv.GPSFix = "3d";
-                                    break;
+                                switch (cv.Fix)
+                                {
+                                    case 0:
+                                        klv.GPSFix = "0";
+                                        break;
+                                    case 2:
+                                        klv.GPSFix = "2d";
+                                        break;
+                                    case 3:
+                                        klv.GPSFix = "3d";
+                                        break;
                                 }
 
                                 telemetry.KLVs.Add(klv);
                             }
                         }
 
-                        if (gpmf.FourCC == "GPS5" && gpmf.Repeat > 0 && devisors != null)
+                        if (gpmf.FourCC == "GPS5" && 
+                            gpmf.Repeat > 0 && 
+                            devisors != null && 
+                            hasGPS9Data == false)
                         {
                             GetPayloadTime(gpsIndex, out _in, out _out);
                             gpsIndex++;
@@ -194,7 +204,7 @@ namespace Cromatix.MP4Reader
                             for (int i = 0; i < repeats; i++)
                             {
                                 var klv = new KLV();
-                                var cv = GetCoordValues(gpmf, devisors, ref pos);
+                                var cv = GetCoordValues5(gpmf, devisors, ref pos);
 
                                 if (telemetry.KLVs.Count > 0 && telemetry.KLVs[telemetry.KLVs.Count - 1].Time != null)
                                 {
@@ -206,11 +216,11 @@ namespace Cromatix.MP4Reader
                                     klv.Time = utcStartTime;
                                 }
 
-                                klv.Lat = cv[0];
-                                klv.Lon = cv[1];
-                                klv.Alt = cv[2];
-                                klv.GroundSpeed = cv[3];
-                                klv.VirtualSpeed = cv[4];
+                                klv.Lat = cv.Lat;
+                                klv.Lon = cv.Lon;
+                                klv.Alt = cv.Alt;
+                                klv.GroundSpeed = cv.Speed2d;
+                                klv.VirtualSpeed = cv.Speed3d;
                                 klv.HDOP = DilutionOfPrecision;
                                 klv.GPSFix = GPSFix;
 
@@ -223,108 +233,38 @@ namespace Cromatix.MP4Reader
             }
         }
 
-        public bool ExportToFile(string filePath, ExportFormat format)
+        private GPS5 GetCoordValues5(GPMFStream gpmf, int[] elements, ref int pos)
         {
-            if (telemetry.KLVs == null || telemetry.KLVs.Count == 0)
-                return false;
-
-            try
+            var content = new ReadOnlySpan<byte>(gpmf.Content, pos + 8, gpmf.StructSize);
+            var result = new GPS5 
             {
-                switch (format)
-                {
-                    case ExportFormat.GPX:
-                        {
-                            try
-                            {
-                                string gpx = Export.ToGPX(telemetry);
-                                File.WriteAllText(filePath, gpx);
-                                return true;
-                            }
-                            catch (Exception e)
-                            {
-                                throw new Exception("Error exporting to GPX", e);
-                            }
-                        }
-                    default:
-                        break;
-                }
-            }
-            catch
-            {
-                return false;
-            }
+                Lat = ByteUtil.ReadLong(ref content) / (double)elements[0],
+                Lon = ByteUtil.ReadLong(ref content) / (double)elements[1],
+                Alt = ByteUtil.ReadLong(ref content) / (double)elements[2],
+                Speed2d = ByteUtil.ReadLong(ref content) / (double)elements[3],
+                Speed3d = ByteUtil.ReadLong(ref content) / (double)elements[4],
+            };
 
-            return false;
-        }
-
-        private List<double> GetCoordValues(GPMFStream gpmf, int[] elements, ref int pos)
-        {
-            // keeps latitude, longitude, altitude, 2D ground speed, and 3D speed values
-            List<double> coords = new List<double>();
-
-            for (int i = 0; i < elements.Length; i++)
-            {
-                byte[] dataHex = new ReadOnlySpan<byte>(gpmf.Content, pos + 8, gpmf.StructSize).ToArray();
-                double num = ByteUtil.HexToInt((int)ByteUtil.BytesToInt(dataHex, 0));
-                pos += 4;
-
-                num = num / elements[i];
-                coords.Add(num);
-            }
-
-            return coords;
-        }
-
-//lat, long, alt, 2D speed, 3D speed, days since 2000, secs since midnight (ms precision), DOP, fix (0, 2D or 3D)
-        struct GPS9 {
-            public double lat;
-            public double lon;
-            public double alt;
-            public double speed2d;
-            public double speed3d;
-            public long d2000;
-            public double secs;
-            public double dop;
-            public short fix;
-        }
-
-        private int ReadLong(ref ReadOnlySpan<byte> data) {
-            var target = data.Slice(0,4);
-            if (BitConverter.IsLittleEndian) {
-                var tmp = target.ToArray().AsSpan();
-                tmp.Reverse();
-                target=tmp;
-            }
-            var result = BitConverter.ToInt32(target);
-            data = data.Slice(4);
+            pos += gpmf.StructSize;
             return result;
         }
-        private short ReadShort(ref ReadOnlySpan<byte> data) {
-            var target = data.Slice(0,2);
-            if (BitConverter.IsLittleEndian) {
-                var tmp = target.ToArray().AsSpan();
-                tmp.Reverse();
-                target=tmp;
-            }
-            var result = BitConverter.ToInt16(target);
-            data = data.Slice(2);
-            return result;
-        }
+
         private GPS9 GetCoordValues9(GPMFStream gpmf, int[] elements, ref int pos)
         {
             var content = new ReadOnlySpan<byte>(gpmf.Content, pos + 8, gpmf.StructSize);
-            var result = new GPS9 {
-                lat = ReadLong(ref content) / (double)elements[0],
-                lon = ReadLong(ref content) / (double)elements[1],
-                alt = ReadLong(ref content) / (double)elements[2],
-                speed2d  = ReadLong(ref content) / (double)elements[3],
-                speed3d = ReadLong(ref content) / (double)elements[4],
-                d2000  = ReadLong(ref content),
-                secs = ReadLong(ref content) / (double)elements[6],
-                dop = ReadShort(ref content) / (double)elements[7],
-                fix = ReadShort(ref content)
+            var result = new GPS9
+            {
+                Lat = ByteUtil.ReadLong(ref content) / (double)elements[0],
+                Lon = ByteUtil.ReadLong(ref content) / (double)elements[1],
+                Alt = ByteUtil.ReadLong(ref content) / (double)elements[2],
+                Speed2d = ByteUtil.ReadLong(ref content) / (double)elements[3],
+                Speed3d = ByteUtil.ReadLong(ref content) / (double)elements[4],
+                d2000 = ByteUtil.ReadLong(ref content),
+                Seconds = ByteUtil.ReadLong(ref content) / (double)elements[6],
+                DOP = ByteUtil.ReadShort(ref content) / (double)elements[7],
+                Fix = ByteUtil.ReadShort(ref content)
             };
-            
+
             pos += gpmf.StructSize;
             return result;
         }

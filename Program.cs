@@ -1,8 +1,10 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
-using (var fs = new FileStream("c:\\temp\\vidtest\\GX010019.mp4", FileMode.Open))
+using Cromatix.MP4Reader;
+
+using (var fs = new FileStream("G:\\GoNoob\\GOPRO11\\GX0046-01_5K.mp4", FileMode.Open))
 {
-    Cromatix.MP4Reader.MP4MetadataReader reader = new Cromatix.MP4Reader.MP4MetadataReader(fs);
+    MP4MetadataReader reader = new MP4MetadataReader(fs);
     reader.ProcessGPMFTelemetry();
-    reader.ExportToFile("./out.gpx", Cromatix.MP4Reader.ExportFormat.GPX);
+    reader.ExportToFile("./out.gpx", ExportFormat.GPX);
 }
